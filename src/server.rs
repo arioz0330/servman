@@ -27,7 +27,7 @@ struct Latest {
 #[derive(Serialize, Deserialize, Debug)]
 struct ModInfo {
     #[serde(rename = "gameVersionLatestFiles")]
-   game_version_latest_files : Vec<LatestFile>,
+    game_version_latest_files: Vec<LatestFile>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -248,6 +248,7 @@ impl Manager {
         // TODO: seperate to reusable functions
         // TODO: allow remove mod
         // TODO: allow github/jenkins mods
+        // TODO: only update loader if newer version available
         let client = reqwest::Client::new();
 
         if self.is_online() {
@@ -258,8 +259,10 @@ impl Manager {
         }
 
         let mut rt = tokio::runtime::Runtime::new()?;
-        
+
         use serde_xml_rs::from_reader;
+
+        let config_lock = super::config::ConfigLock::new();
 
         let fabric: Metadata = rt.block_on(async {
             from_reader(client.get(
@@ -268,15 +271,21 @@ impl Manager {
         });
 
         let ver = fabric.versioning.latest.data;
-        
-        let som = rt.block_on(async {
-            client.get(&format!("https://maven.fabricmc.net/net/fabricmc/fabric-installer/{0}/fabric-installer-{0}.jar", ver)).send().await.unwrap().bytes().await.unwrap()
-        });
-    
-        match fs::File::create("./server/fabric-installer.jar") {
-            Ok(mut file) => file.write_all(&som).unwrap(),
-            Err(e) => println!("Error downloading installer: {}", e),
-        };
+
+        if ver > config_lock.installer_version {
+            println!("Updating installer");
+
+            let som = rt.block_on(async {
+                client.get(&format!("https://maven.fabricmc.net/net/fabricmc/fabric-installer/{0}/fabric-installer-{0}.jar", ver)).send().await.unwrap().bytes().await.unwrap()
+            });
+
+            match fs::File::create("./server/fabric-installer.jar") {
+                Ok(mut file) => file.write_all(&som).unwrap(),
+                Err(e) => println!("Error downloading installer: {}", e),
+            };
+
+            config_lock.update_installer_version(ver);
+        }
 
         do_eula();
 
@@ -288,30 +297,38 @@ impl Manager {
                 "-downloadMinecraft",
             ])
             .current_dir("server")
-            .stdout(Stdio::piped()) 
+            .stdout(Stdio::piped())
             .spawn()?;
-            
-        let a = BufReader::new(install.stdout.take().unwrap()).lines().skip(3).next().unwrap().unwrap();
-        let start = a.find("(").unwrap() + 1;
-        let end = a.find(")").unwrap();
-        let ver = &a[start..end];
-        
+
+        let a = BufReader::new(install.stdout.take().unwrap())
+            .lines()
+            .skip(3)
+            .next()
+            .unwrap()
+            .unwrap();
+        let left_paren = a.find("(").unwrap();
+        let right_paren = a.find(")").unwrap();
+        let game_version = &a[left_paren + 1..right_paren];
+        super::config::ConfigLock::new().update_loader_version(a[25..left_paren].to_string());
+
+        if game_version.to_string() > super::config::ConfigLock::new().game_version {
+            super::config::ConfigLock::new().update_game_version(game_version.to_string());
+        }
+
         let config = super::config::Config::new();
 
         for (mod_name, mod_id) in config.mods.iter() {
             let _ = rt.block_on(async {
                 println!("Checking mod: {}", mod_name);
 
-                let config_lock = super::config::ConfigLock::new();
-
                 let info: ModInfo = serde_json::from_str(&client.get(&format!("https://addons-ecs.forgesvc.net/api/v2/addon/{}", mod_id)).send().await.unwrap().text().await.unwrap()).unwrap();
 
-                for item in info.game_version_latest_files {                    
-                    if item.game_version == ver {
+                for item in info.game_version_latest_files {
+                    if item.game_version == game_version {
                         if super::config::ConfigLock::new().is_new(*mod_id) {
                             super::config::ConfigLock::new().new_mod(mod_name, *mod_id, item.project_file_id);
                         } else {
-                            if config_lock.is_same_version(mod_name, item.project_file_id) {
+                            if super::config::ConfigLock::new().is_same_version(mod_name, item.project_file_id) {
                                 break;
                             }
                             super::config::ConfigLock::new().update_file_id(mod_name, *mod_id, item.project_file_id);
@@ -399,7 +416,5 @@ pub fn do_eula() {
         .write(true)
         .create_new(true)
         .open("server/eula.txt")
-        .and_then(|mut file| {
-            file.write(b"eula = true")
-        });
+        .and_then(|mut file| file.write(b"eula = true"));
 }

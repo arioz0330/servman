@@ -9,8 +9,8 @@ use parking_lot::Mutex;
 use rocket::State;
 // use rocket::Data;
 // use serde::Deserialize;
-mod server;
 mod config;
+mod server;
 
 #[macro_use]
 extern crate rocket;
@@ -79,9 +79,9 @@ fn main() {
     let config = config::Config::new();
 
     let cfg = rocket::config::Config::build(rocket::config::Environment::active().unwrap())
-    // .address("127.0.0.1")
-    .port(config.port)   
-    .unwrap();
+        // .address("127.0.0.1")
+        .port(config.port)
+        .unwrap();
 
     rocket::custom(cfg)
         .mount("/", routes![start, stop, update, delete, create])
