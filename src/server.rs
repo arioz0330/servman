@@ -1,3 +1,4 @@
+use super::config;
 use parking_lot::RwLock;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::process::{Child, Command, Stdio};
@@ -98,6 +99,12 @@ pub struct Manager {
     jar_name: &'static str,
 }
 
+impl Default for Manager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Manager {
     /// Creates a new server manager
     /// # Examples
@@ -163,10 +170,7 @@ impl Manager {
     /// # Remarks
     /// Queries the currently online servers, must have been launched by calling [start](struct.Manager.html#method.start)
     pub fn is_online(&mut self) -> bool {
-        match self.get() {
-            Some(_) => true,
-            None => false,
-        }
+        self.get().is_some()
     }
 
     /// Launches a server
@@ -175,7 +179,7 @@ impl Manager {
             return Err(Error::ServerFilesMissing());
         }
 
-        if let Some(_) = self.server {
+        if self.server.is_some() {
             Err(Error::ServerAlreadyOnline())
         } else {
             let mut command = Command::new("java");
@@ -202,7 +206,7 @@ impl Manager {
                 BufReader::new(stdout).lines().for_each(|x| {
                     let a = x.unwrap();
                     println!("{}", &a);
-                    if &a.len() > &38 && &a[33..37] == "Done" {
+                    if a.len() > 38 && &a[33..37] == "Done" {
                         *starting_lock.write() = false;
                     }
                 });
@@ -262,7 +266,7 @@ impl Manager {
 
         use serde_xml_rs::from_reader;
 
-        let config_lock = super::config::ConfigLock::new();
+        let mut config_lock = config::CONFIG_LOCK.lock();
 
         let fabric: Metadata = rt.block_on(async {
             from_reader(client.get(
@@ -272,7 +276,7 @@ impl Manager {
 
         let ver = fabric.versioning.latest.data;
 
-        if ver > config_lock.installer_version {
+        if !config_lock.installer_version.eq(&ver) {
             println!("Updating installer");
 
             let som = rt.block_on(async {
@@ -302,36 +306,37 @@ impl Manager {
 
         let a = BufReader::new(install.stdout.take().unwrap())
             .lines()
-            .skip(3)
-            .next()
+            .nth(3)
             .unwrap()
             .unwrap();
-        let left_paren = a.find("(").unwrap();
-        let right_paren = a.find(")").unwrap();
-        let game_version = &a[left_paren + 1..right_paren];
-        super::config::ConfigLock::new().update_loader_version(a[25..left_paren].to_string());
+        let left_paren = a.find('(').unwrap();
+        let right_paren = a.find(')').unwrap();
+        let game_version = &a[left_paren + 1..right_paren].to_string();
+        let loader_version = a[25..left_paren].to_string();
 
-        if game_version.to_string() > super::config::ConfigLock::new().game_version {
-            super::config::ConfigLock::new().update_game_version(game_version.to_string());
+        if !config_lock.loader_version.eq(&loader_version) {
+            config_lock.update_loader_version(loader_version);
         }
 
-        let config = super::config::Config::new();
+        if !game_version.eq(&config_lock.game_version) {
+            config_lock.update_game_version(game_version.to_string());
+        }
 
-        for (mod_name, mod_id) in config.mods.iter() {
+        for (mod_name, mod_id) in config::CONFIG.mods.iter() {
             let _ = rt.block_on(async {
                 println!("Checking mod: {}", mod_name);
 
                 let info: ModInfo = serde_json::from_str(&client.get(&format!("https://addons-ecs.forgesvc.net/api/v2/addon/{}", mod_id)).send().await.unwrap().text().await.unwrap()).unwrap();
 
                 for item in info.game_version_latest_files {
-                    if item.game_version == game_version {
-                        if super::config::ConfigLock::new().is_new(*mod_id) {
-                            super::config::ConfigLock::new().new_mod(mod_name, *mod_id, item.project_file_id);
+                    if item.game_version.eq(game_version) {
+                        if config_lock.is_new(*mod_id) {
+                            config_lock.new_mod(mod_name, *mod_id, item.project_file_id);
                         } else {
-                            if super::config::ConfigLock::new().is_same_version(mod_name, item.project_file_id) {
+                            if config_lock.is_same_version(mod_name, item.project_file_id) {
                                 break;
                             }
-                            super::config::ConfigLock::new().update_file_id(mod_name, *mod_id, item.project_file_id);
+                            config_lock.update_file_id(mod_name, *mod_id, item.project_file_id);
                         }
 
                         print!("Downloading mod: {}, ", mod_name);

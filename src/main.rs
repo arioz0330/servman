@@ -76,11 +76,9 @@ fn create(manager: State<Mutex<server::Manager>>) {
 }
 
 fn main() {
-    let config = config::Config::new();
-
     let cfg = rocket::config::Config::build(rocket::config::Environment::active().unwrap())
         // .address("127.0.0.1")
-        .port(config.port)
+        .port(config::CONFIG.port)
         .unwrap();
 
     rocket::custom(cfg)

@@ -1280,6 +1280,7 @@ dependencies = [
 name = "servman"
 version = "0.1.0"
 dependencies = [
+ "lazy_static",
  "parking_lot",
  "reqwest",
  "rocket",
