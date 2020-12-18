@@ -3,9 +3,33 @@ use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::fs;
 
+// TODO: update update lock inf with config
+
 lazy_static! {
-    pub static ref CONFIG: Config =
-        serde_json::from_slice(&fs::read("config.json").unwrap()).unwrap();
+    pub static ref CONFIG: Config = match fs::read("config.json") {
+        Ok(file) => match serde_json::from_slice(&file) {
+            Ok(conf) => Config { ..conf },
+            Err(e) => {
+                println!("Error opening config-lock: {}", e);
+                let conf = Config {
+                    port: 8080,
+                    mods: HashMap::new(),
+                };
+                let _ = fs::write("config.json", serde_json::to_string_pretty(&conf).unwrap().as_bytes());
+                conf
+            }
+        },
+        Err(e) => {
+            println!("Error opening config-lock: {}", e);
+            let conf = Config {
+                port: 8080,
+                mods: HashMap::new(),
+            };
+            let _ = fs::write("config.json", serde_json::to_string_pretty(&conf).unwrap().as_bytes());
+            conf
+        }
+    };
+
     pub static ref CONFIG_LOCK: Mutex<ConfigLock> = match fs::read("config-lock.json") {
         Ok(file) => match serde_json::from_slice(&file) {
             Ok(conflock) => Mutex::new(ConfigLock { ..conflock }),
@@ -84,12 +108,12 @@ impl ConfigLock {
     }
 
     pub fn update_installer_version(&mut self, new_version: String) {
-        let _ = self.installer_version = new_version;
+        let _ = self.installer_version = new_version.to_string();
         match fs::write(
             "config-lock.json",
             serde_json::to_string_pretty(&self).unwrap().as_bytes(),
         ) {
-            Ok(()) => println!("Updated installer to {}", self.loader_version),
+            Ok(()) => println!("Updated installer to {}", new_version.to_string()),
             Err(e) => println!("Error updating installer version in config-lock: {}", e),
         }
     }

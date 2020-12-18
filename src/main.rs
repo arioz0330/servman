@@ -1,12 +1,13 @@
-#![feature(proc_macro_hygiene, decl_macro, iter_advance_by, option_insert)]
+#![feature(proc_macro_hygiene, decl_macro, iter_advance_by, option_insert, with_options)]
 
 // TODO: please clean up all code
 // TODO: setup ssl
+// TODO: handle all errors correctly
 
 use parking_lot::Mutex;
 // use rocket::http::{Cookie, Cookies};
 // use rocket::response::{status, Flash, Redirect};
-use rocket::State;
+use rocket::{State, http::RawStr};
 // use rocket::Data;
 // use serde::Deserialize;
 mod config;
@@ -75,6 +76,16 @@ fn create(manager: State<Mutex<server::Manager>>) {
     let _ = manager.lock().create();
 }
 
+#[post("/op/<name>")]
+fn op(manager: State<Mutex<server::Manager>>, name: &RawStr) {
+    let _ = manager.lock().op(name);
+}
+
+#[post("/deop/<name>")]
+fn deop(manager: State<Mutex<server::Manager>>, name: &RawStr) {
+    let _ = manager.lock().deop(name);
+}
+
 fn main() {
     let cfg = rocket::config::Config::build(rocket::config::Environment::active().unwrap())
         // .address("127.0.0.1")
@@ -82,7 +93,7 @@ fn main() {
         .unwrap();
 
     rocket::custom(cfg)
-        .mount("/", routes![start, stop, update, delete, create])
+        .mount("/", routes![start, stop, update, delete, create, op, deop])
         .manage(Mutex::new(server::Manager::new()))
         .launch();
 }
