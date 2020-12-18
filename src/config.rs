@@ -97,7 +97,7 @@ impl ConfigLock {
     }
 
     pub fn new_mod(&mut self, mod_name: &str, mod_id: u32, file_id: u32) {
-        let _ = self.mods.insert(mod_name.to_string(), [mod_id, file_id]);
+        self.mods.insert(mod_name.to_string(), [mod_id, file_id]);
         match fs::write(
             "config-lock.json",
             serde_json::to_string_pretty(&self).unwrap().as_bytes(),
@@ -108,7 +108,7 @@ impl ConfigLock {
     }
 
     pub fn update_installer_version(&mut self, new_version: String) {
-        let _ = self.installer_version = new_version.to_string();
+        self.installer_version = new_version.to_string();
         match fs::write(
             "config-lock.json",
             serde_json::to_string_pretty(&self).unwrap().as_bytes(),
@@ -119,7 +119,7 @@ impl ConfigLock {
     }
 
     pub fn update_loader_version(&mut self, new_version: String) {
-        let _ = self.loader_version = new_version;
+        self.loader_version = new_version;
         match fs::write(
             "config-lock.json",
             serde_json::to_string_pretty(&self).unwrap().as_bytes(),

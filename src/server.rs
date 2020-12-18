@@ -133,7 +133,11 @@ impl Manager {
             return Err(Error::ServerAlreadyExists());
         }
 
-        let _ = fs::create_dir("server");
+        match fs::create_dir("server") {
+            Ok(()) => println!("Server directory created"),
+            Err(e) => println!("Error creating server directory: {}", e),
+        };
+
         self.update()?;
 
         Ok(())
@@ -261,7 +265,7 @@ impl Manager {
     /// # Remarks
     /// Stops the server if it's currently running
     pub fn delete(&mut self) -> Result<()> {
-        let _ = self.stop();
+        self.stop()?;
         if !self.exists() {
             return Err(Error::ServerFilesMissing());
         }
@@ -285,8 +289,6 @@ impl Manager {
                 Err(e) => println!("Error stopping server: {}", e),
             }
         }
-
-        let _ = fs::create_dir("server");
 
         let mut rt = tokio::runtime::Runtime::new()?;
 
