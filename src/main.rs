@@ -1,4 +1,5 @@
-#![feature(proc_macro_hygiene, decl_macro, iter_advance_by)]
+#![feature(proc_macro_hygiene, decl_macro, iter_advance_by, option_insert)]
+
 // TODO: please clean up all code
 // TODO: setup ssl
 

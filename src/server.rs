@@ -246,7 +246,7 @@ impl Manager {
     /// Stops the server if it's currently running
     pub fn update(&mut self) -> Result<()> {
         // TODO: seperate to reusable functions
-        // TODO: dont download same versions
+        // TODO: allow remove mod
         // TODO: allow github/jenkins mods
         let client = reqwest::Client::new();
 
@@ -297,23 +297,29 @@ impl Manager {
         let ver = &a[start..end];
         
         let config = super::config::Config::new();
-        
-        let _ = fs::remove_dir_all("server/mods");
 
-        match fs::create_dir("server/mods") {
-            Ok(()) => println!("Created mods directory"),
-            Err(e) => println!("Error creating mods directory: {}", e),
-        };
-
-        for (name, id) in config.mods.iter() {
+        for (mod_name, mod_id) in config.mods.iter() {
             let _ = rt.block_on(async {
-                print!("Downloading mod: {}, ", name);
+                println!("Checking mod: {}", mod_name);
 
-                let info: ModInfo = serde_json::from_str(&client.get(&format!("https://addons-ecs.forgesvc.net/api/v2/addon/{}", id)).send().await.unwrap().text().await.unwrap()).unwrap();
+                let config_lock = super::config::ConfigLock::new();
 
-                for item in info.game_version_latest_files {
+                let info: ModInfo = serde_json::from_str(&client.get(&format!("https://addons-ecs.forgesvc.net/api/v2/addon/{}", mod_id)).send().await.unwrap().text().await.unwrap()).unwrap();
+
+                for item in info.game_version_latest_files {                    
                     if item.game_version == ver {
-                        let mod_url = client.get(&format!("https://addons-ecs.forgesvc.net/api/v2/addon/{}/file/{}/download-url", id, item.project_file_id)).send().await.unwrap().text().await.unwrap();
+                        if super::config::ConfigLock::new().is_new(*mod_id) {
+                            super::config::ConfigLock::new().new_mod(mod_name, *mod_id, item.project_file_id);
+                        } else {
+                            if config_lock.is_same_version(mod_name, item.project_file_id) {
+                                break;
+                            }
+                            super::config::ConfigLock::new().update_file_id(mod_name, *mod_id, item.project_file_id);
+                        }
+
+                        print!("Downloading mod: {}, ", mod_name);
+
+                        let mod_url = client.get(&format!("https://addons-ecs.forgesvc.net/api/v2/addon/{}/file/{}/download-url", mod_id, item.project_file_id)).send().await.unwrap().text().await.unwrap();
                         let mod_bytes = client.get(&mod_url).send().await.unwrap().bytes().await.unwrap();
 
                         match fs::File::create(&format!("./server/mods/{}", item.project_file_name)) {
@@ -321,11 +327,11 @@ impl Manager {
                             Err(e) => println!("Error saving mod: {}", e),
                         };
 
+                        println!("Done");
+
                         break;
                     }
                 }
-
-                println!("Done");
             });
         }
 

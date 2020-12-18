@@ -1,3 +1,4 @@
 /target
 /ssl
 /server
+config*.json
