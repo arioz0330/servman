@@ -1,8 +1,0 @@
-{
-    "port": 8080,
-    "mods": {
-        "fabric_api": 306612,
-        "phosphor": 372124,
-        "lithium": 360438
-    }
-}
