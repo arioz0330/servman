@@ -1,63 +1,45 @@
-use lazy_static::lazy_static;
 use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::fs;
 
 // TODO: update update lock inf with config
 
-lazy_static! {
-    pub static ref CONFIG: Config = match fs::read("config.json") {
-        Ok(file) => match serde_json::from_slice(&file) {
-            Ok(conf) => Config { ..conf },
-            Err(e) => {
-                println!("Error opening config-lock: {}", e);
-                let conf = Config {
-                    port: 8080,
-                    mods: HashMap::new(),
-                };
-                let _ = fs::write("config.json", serde_json::to_string_pretty(&conf).unwrap().as_bytes());
-                conf
+lazy_static::lazy_static! {
+    pub static ref CONFIG: Config = {
+        if let Some(file) = fs::read("config.json").ok() {
+            let conf = serde_json::from_slice(&file).ok();
+            if conf.is_some() {
+                return Config { ..conf.unwrap() };
             }
-        },
-        Err(e) => {
-            println!("Error opening config-lock: {}", e);
-            let conf = Config {
-                port: 8080,
-                mods: HashMap::new(),
-            };
-            let _ = fs::write("config.json", serde_json::to_string_pretty(&conf).unwrap().as_bytes());
-            conf
         }
+        println!("Config file not found. Creating now");
+        let conf = Config {
+            port: 8080,
+            mods: HashMap::new(),
+        };
+        if let Ok(pretty_string) = serde_json::to_string_pretty(&conf) {
+            if let Err(e) = fs::write("config.json", pretty_string) {
+                println!("Error creating config: {}", e);
+            }
+        }
+        conf
     };
 
-    pub static ref CONFIG_LOCK: Mutex<ConfigLock> = match fs::read("config-lock.json") {
-        Ok(file) => match serde_json::from_slice(&file) {
-            Ok(conflock) => Mutex::new(ConfigLock { ..conflock }),
-            Err(e) => {
-                println!("Error opening config-lock: {}", e);
-                let port = 8080;
-                let mods: HashMap<String, [u32; 2]> = HashMap::new();
-                Mutex::new(ConfigLock {
-                    port,
-                    installer_version: String::new(),
-                    loader_version: String::new(),
-                    game_version: String::new(),
-                    mods,
-                })
+    pub static ref CONFIG_LOCK: Mutex<ConfigLock> = {
+        if let Some(file) = fs::read("config-lock.json").ok() {
+            let conf = serde_json::from_slice(&file).ok();
+            if conf.is_some() {
+                return Mutex::new(ConfigLock { ..conf.unwrap() });
             }
-        },
-        Err(e) => {
-            println!("Error opening config-lock: {}", e);
-            let port = 8080;
-            let mods: HashMap<String, [u32; 2]> = HashMap::new();
-            Mutex::new(ConfigLock {
-                port,
-                installer_version: String::new(),
-                loader_version: String::new(),
-                game_version: String::new(),
-                mods,
-            })
         }
+        println!("Config-lock file not found. Creating now");
+        Mutex::new(ConfigLock {
+            port: 8080,
+            installer_version: String::new(),
+            loader_version: String::new(),
+            game_version: String::new(),
+            mods: HashMap::new(),
+        })
     };
 }
 
@@ -87,59 +69,55 @@ impl ConfigLock {
 
     pub fn update_file_id(&self, mod_name: &str, mod_id: u32, new_file_id: u32) {
         self.mods.get(mod_name).insert(&[mod_id, new_file_id]);
-        match fs::write(
+        if let Err(e) = fs::write(
             "config-lock.json",
             serde_json::to_string_pretty(&self).unwrap(),
         ) {
-            Ok(()) => println!("Updated mod: {} in config-lock", mod_name),
-            Err(e) => println!("Error updating mod: {} in config-lock: {}", mod_name, e),
+            println!("Error updating mod: {} in config-lock: {}", mod_name, e);
         }
     }
 
     pub fn new_mod(&mut self, mod_name: &str, mod_id: u32, file_id: u32) {
         self.mods.insert(mod_name.to_string(), [mod_id, file_id]);
-        match fs::write(
+
+        if let Err(e) = fs::write(
             "config-lock.json",
             serde_json::to_string_pretty(&self).unwrap().as_bytes(),
         ) {
-            Ok(()) => println!("Added mod: {} to config-lock", mod_name),
-            Err(e) => println!("Error adding mod: {} to config-lock: {}", mod_name, e),
+            println!("Error adding mod: {} to config-lock: {}", mod_name, e);
         }
     }
 
     pub fn update_installer_version(&mut self, new_version: String) {
         self.installer_version = new_version.to_string();
-        match fs::write(
+
+        if let Err(e) = fs::write(
             "config-lock.json",
             serde_json::to_string_pretty(&self).unwrap().as_bytes(),
         ) {
-            Ok(()) => println!("Updated installer to {}", new_version.to_string()),
-            Err(e) => println!("Error updating installer version in config-lock: {}", e),
+            println!("Error updating installer version in config-lock: {}", e);
         }
     }
 
     pub fn update_loader_version(&mut self, new_version: String) {
         self.loader_version = new_version;
-        match fs::write(
+
+        if let Err(e) = fs::write(
             "config-lock.json",
             serde_json::to_string_pretty(&self).unwrap().as_bytes(),
         ) {
-            Ok(()) => println!("Updated loader to {}", self.loader_version),
-            Err(e) => println!("Error updating loader version in config-lock: {}", e),
+            println!("Error updating loader version in config-lock: {}", e);
         }
     }
 
     pub fn update_game_version(&mut self, new_version: String) {
-        let _ = self.game_version = new_version;
-        match fs::write(
+        self.game_version = new_version;
+
+        if let Err(e) = fs::write(
             "config-lock.json",
             serde_json::to_string_pretty(&self).unwrap().as_bytes(),
         ) {
-            Ok(()) => println!(
-                "Updated game version to {} in config file",
-                self.loader_version
-            ),
-            Err(e) => println!("Error updating game version in config-lock: {}", e),
+            println!("Error updating game version in config-lock: {}", e);
         }
     }
 }

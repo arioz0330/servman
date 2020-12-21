@@ -1,4 +1,10 @@
-#![feature(proc_macro_hygiene, decl_macro, iter_advance_by, option_insert, with_options)]
+#![feature(
+    proc_macro_hygiene,
+    decl_macro,
+    iter_advance_by,
+    option_insert,
+    with_options
+)]
 
 // TODO: please clean up all code
 // TODO: setup ssl
@@ -7,7 +13,7 @@
 use parking_lot::Mutex;
 // use rocket::http::{Cookie, Cookies};
 // use rocket::response::{status, Flash, Redirect};
-use rocket::{State, http::RawStr};
+use rocket::{http::RawStr, State};
 // use rocket::Data;
 // use serde::Deserialize;
 mod config;

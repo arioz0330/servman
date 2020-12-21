@@ -1,2 +1,8 @@
 [global]
 secret_key = "L5mmMuyb8blMepa9pZt6P0Oe1WXAOiQVVOgoLWPrXHs="
+
+[development]
+
+[staging]
+
+[production]

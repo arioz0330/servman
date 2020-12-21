@@ -249,17 +249,17 @@ impl Manager {
         Err(Error::ServerOffline())
     }
 
-        /// OPs user with specified name
-        pub fn deop(&mut self, name: &str) -> Result<()> {
-            if let Some(inst) = &mut self.server {
-                match inst.send(format!("/deop {}", name)) {
-                    Ok(()) => println!("Deop'd {}", name),
-                    Err(e) => println!("Error Deop'ing {}: {}", name, e),
-                };
-                return Ok(());
-            }
-            Err(Error::ServerOffline())
+    /// OPs user with specified name
+    pub fn deop(&mut self, name: &str) -> Result<()> {
+        if let Some(inst) = &mut self.server {
+            match inst.send(format!("/deop {}", name)) {
+                Ok(()) => println!("Deop'd {}", name),
+                Err(e) => println!("Error Deop'ing {}: {}", name, e),
+            };
+            return Ok(());
         }
+        Err(Error::ServerOffline())
+    }
 
     /// Deletes a server's files
     /// # Remarks
