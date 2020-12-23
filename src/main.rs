@@ -1,10 +1,4 @@
-#![feature(
-    proc_macro_hygiene,
-    decl_macro,
-    iter_advance_by,
-    option_insert,
-    with_options
-)]
+#![feature(decl_macro, option_insert)]
 
 // TODO: please clean up all code
 // TODO: setup ssl
