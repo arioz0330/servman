@@ -1,5 +1,5 @@
 use super::config;
-use parking_lot::RwLock;
+use std::sync::RwLock;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::process::{Child, Command, Stdio};
 use std::{fmt, fs, thread};
@@ -8,6 +8,9 @@ use std::{path::Path, sync::Arc};
 type Result<T> = std::result::Result<T, Error>;
 
 extern crate serde_xml_rs;
+
+const FABRIC_INSTALLER: &str = "https://maven.fabricmc.net/net/fabricmc/fabric-installer";
+const MOD_INFO: &str = "https://addons-ecs.forgesvc.net/api/v2/addon/";
 
 #[derive(Deserialize, Debug)]
 struct Metadata {
@@ -211,7 +214,7 @@ impl Manager {
                     let a = x.unwrap();
                     println!("{}", &a);
                     if a.len() > 38 && &a[33..37] == "Done" {
-                        *starting_lock.write() = false;
+                        *starting_lock.write().unwrap() = false;
                     }
                 });
             });
@@ -225,7 +228,7 @@ impl Manager {
     /// Stops a server
     pub fn stop(&mut self) -> Result<()> {
         if let Some(inst) = &mut self.server {
-            if !*inst.starting.read() {
+            if !*inst.starting.read().unwrap() {
                 inst.stop()?;
                 let _ = inst.stdout_join.take().unwrap().join();
                 inst.server_process.wait()?;
@@ -294,12 +297,21 @@ impl Manager {
 
         use serde_xml_rs::from_reader;
 
-        let mut config_lock = config::CONFIG_LOCK.lock();
+        let mut config_lock = config::CONFIG_LOCK.lock().unwrap();
 
         let fabric: Metadata = rt.block_on(async {
-            from_reader(client.get(
-                "https://maven.fabricmc.net/net/fabricmc/fabric-installer/maven-metadata.xml",
-            ).send().await.unwrap().text().await.unwrap().as_bytes()).unwrap()
+            from_reader(
+                client
+                    .get(&format!("{}maven-metadata.xml", FABRIC_INSTALLER))
+                    .send()
+                    .await
+                    .unwrap()
+                    .text()
+                    .await
+                    .unwrap()
+                    .as_bytes(),
+            )
+            .unwrap()
         });
 
         let ver = fabric.versioning.latest.data;
@@ -308,7 +320,17 @@ impl Manager {
             println!("Updating installer");
 
             let som = rt.block_on(async {
-                client.get(&format!("https://maven.fabricmc.net/net/fabricmc/fabric-installer/{0}/fabric-installer-{0}.jar", ver)).send().await.unwrap().bytes().await.unwrap()
+                client
+                    .get(&format!(
+                        "{0}{1}/fabric-installer-{1}.jar",
+                        FABRIC_INSTALLER, ver
+                    ))
+                    .send()
+                    .await
+                    .unwrap()
+                    .bytes()
+                    .await
+                    .unwrap()
             });
 
             match fs::File::create("./server/fabric-installer.jar") {
@@ -354,7 +376,17 @@ impl Manager {
             let _ = rt.block_on(async {
                 println!("Checking mod: {}", mod_name);
 
-                let info: ModInfo = serde_json::from_str(&client.get(&format!("https://addons-ecs.forgesvc.net/api/v2/addon/{}", mod_id)).send().await.unwrap().text().await.unwrap()).unwrap();
+                let info: ModInfo = serde_json::from_str(
+                    &client
+                        .get(&format!("{}{}", MOD_INFO, mod_id))
+                        .send()
+                        .await
+                        .unwrap()
+                        .text()
+                        .await
+                        .unwrap(),
+                )
+                .unwrap();
 
                 for item in info.game_version_latest_files {
                     if item.game_version.eq(game_version) {
@@ -369,10 +401,28 @@ impl Manager {
 
                         print!("Downloading mod: {}, ", mod_name);
 
-                        let mod_url = client.get(&format!("https://addons-ecs.forgesvc.net/api/v2/addon/{}/file/{}/download-url", mod_id, item.project_file_id)).send().await.unwrap().text().await.unwrap();
-                        let mod_bytes = client.get(&mod_url).send().await.unwrap().bytes().await.unwrap();
+                        let mod_url = client
+                            .get(&format!(
+                                "{}{}/file/{}/download-url",
+                                MOD_INFO, mod_id, item.project_file_id
+                            ))
+                            .send()
+                            .await
+                            .unwrap()
+                            .text()
+                            .await
+                            .unwrap();
+                        let mod_bytes = client
+                            .get(&mod_url)
+                            .send()
+                            .await
+                            .unwrap()
+                            .bytes()
+                            .await
+                            .unwrap();
 
-                        match fs::File::create(&format!("./server/mods/{}", item.project_file_name)) {
+                        match fs::File::create(&format!("./server/mods/{}", item.project_file_name))
+                        {
                             Ok(mut file) => file.write_all(&mod_bytes).unwrap(),
                             Err(e) => println!("Error saving mod: {}", e),
                         };

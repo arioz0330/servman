@@ -4,7 +4,7 @@
 // TODO: setup ssl
 // TODO: handle all errors correctly
 
-use parking_lot::Mutex;
+use std::sync::Mutex;
 // use rocket::http::{Cookie, Cookies};
 // use rocket::response::{status, Flash, Redirect};
 use rocket::{http::RawStr, State};
@@ -49,7 +49,7 @@ extern crate serde;
 // fn start(mut _cookies: Cookies, manager: State<Mutex<server::Manager>>) {
 fn start(manager: State<Mutex<server::Manager>>) {
     // if cookies.get_private("loggedin").unwrap().value() == "true" {
-    let _ = manager.lock().start();
+    let _ = manager.lock().unwrap().start();
     // }
 }
 
@@ -57,33 +57,33 @@ fn start(manager: State<Mutex<server::Manager>>) {
 // fn stop(mut _cookies: Cookies, manager: State<Mutex<server::Manager>>) {
 fn stop(manager: State<Mutex<server::Manager>>) {
     // if cookies.get_private("loggedin").unwrap().value() == "true" {
-    let _ = manager.lock().stop();
+    let _ = manager.lock().unwrap().stop();
     // }
 }
 
 #[post("/update")]
 fn update(manager: State<Mutex<server::Manager>>) {
-    let _ = manager.lock().update();
+    let _ = manager.lock().unwrap().update();
 }
 
 #[post("/delete")]
 fn delete(manager: State<Mutex<server::Manager>>) {
-    let _ = manager.lock().delete();
+    let _ = manager.lock().unwrap().delete();
 }
 
 #[post("/create")]
 fn create(manager: State<Mutex<server::Manager>>) {
-    let _ = manager.lock().create();
+    let _ = manager.lock().unwrap().create();
 }
 
 #[post("/op/<name>")]
 fn op(manager: State<Mutex<server::Manager>>, name: &RawStr) {
-    let _ = manager.lock().op(name);
+    let _ = manager.lock().unwrap().op(name);
 }
 
 #[post("/deop/<name>")]
 fn deop(manager: State<Mutex<server::Manager>>, name: &RawStr) {
-    let _ = manager.lock().deop(name);
+    let _ = manager.lock().unwrap().deop(name);
 }
 
 fn main() {

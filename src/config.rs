@@ -1,7 +1,6 @@
-use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::fs;
-
+use std::sync::Mutex;
 // TODO: update update lock inf with config
 
 lazy_static::lazy_static! {
