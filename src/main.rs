@@ -3,6 +3,7 @@
 // TODO: please clean up all code
 // TODO: setup ssl
 // TODO: handle all errors correctly
+// TODO: website
 
 use std::sync::Mutex;
 // use rocket::http::{Cookie, Cookies};
@@ -10,6 +11,7 @@ use std::sync::Mutex;
 use rocket::{http::RawStr, State};
 // use rocket::Data;
 // use serde::Deserialize;
+
 mod config;
 mod server;
 
