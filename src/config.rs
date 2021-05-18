@@ -1,51 +1,66 @@
-use std::collections::HashMap;
 use std::fs;
 use std::sync::Mutex;
+use super::mods::MCMod;
+
 // TODO: update update lock inf with config
+
+pub fn create_new_config() -> Config {
+    let def_conf = Config {
+        port: 8080,
+        curseforge_mods: Vec::new(),
+        modrinth_mods: Vec::new(),
+    };
+
+        println!("config.json might not exist. Creating now");
+        match serde_json::to_string_pretty(&def_conf) {
+            Ok(pretty_string) => {
+                match fs::write("config.json", pretty_string) {
+                    Ok(_) => println!("Created config.json"),
+                    Err(e) => println!("Error creating config.json: {}", e),
+                }
+            },
+            Err(e) => println!("Error parsing default config: {}", e)
+        }
+        def_conf
+}
 
 lazy_static::lazy_static! {
     pub static ref CONFIG: Config = {
-        if let Some(file) = fs::read("config.json").ok() {
-            let conf = serde_json::from_slice(&file).ok();
-            if conf.is_some() {
-                return Config { ..conf.unwrap() };
+            match fs::read("config.json") {
+                Ok(file) => match serde_json::from_slice::<Config>(&file) {
+                    Ok(conf) => conf,
+                    _ => create_new_config(),
+                },
+                _ => create_new_config(),
             }
-        }
-        println!("Config file not found. Creating now");
-        let conf = Config {
-            port: 8080,
-            mods: HashMap::new(),
         };
-        if let Ok(pretty_string) = serde_json::to_string_pretty(&conf) {
-            if let Err(e) = fs::write("config.json", pretty_string) {
-                println!("Error creating config: {}", e);
-            }
-        }
-        conf
-    };
+
 
     pub static ref CONFIG_LOCK: Mutex<ConfigLock> = {
-        if let Some(file) = fs::read("config-lock.json").ok() {
-            let conf = serde_json::from_slice(&file).ok();
-            if conf.is_some() {
-                return Mutex::new(ConfigLock { ..conf.unwrap() });
-            }
-        }
-        println!("Config-lock file not found. Creating now");
-        Mutex::new(ConfigLock {
+        let def_config_lock = ConfigLock {
             port: 8080,
             installer_version: String::new(),
             loader_version: String::new(),
             game_version: String::new(),
-            mods: HashMap::new(),
-        })
+            curseforge_mods: Vec::new(),
+            modrinth_mods: Vec::new(),
+        };
+
+        match fs::read("config-lock.json") {
+            Ok(file) => match serde_json::from_slice(&file) {
+                Ok(conf) => Mutex::new(conf),
+                _ => Mutex::new(def_config_lock),
+            },
+            _ => Mutex::new(def_config_lock),
+        }
     };
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Config {
     pub port: u16,
-    pub mods: HashMap<String, u32>,
+    pub curseforge_mods: Vec<MCMod>,
+    pub modrinth_mods: Vec<MCMod>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -54,69 +69,73 @@ pub struct ConfigLock {
     pub installer_version: String,
     pub loader_version: String,
     pub game_version: String,
-    pub mods: HashMap<String, [u32; 2]>,
+    pub curseforge_mods: Vec<MCMod>,
+    pub modrinth_mods: Vec<MCMod>,
 }
 
 impl ConfigLock {
-    pub fn is_new(&self, new_id: u32) -> bool {
-        !self.mods.values().any(|info| info[0] == new_id)
-    }
-
-    pub fn is_same_version(&self, mod_name: &str, file_id: u32) -> bool {
-        self.mods.get(mod_name).unwrap()[1].eq(&file_id)
-    }
-
-    pub fn update_file_id(&self, mod_name: &str, mod_id: u32, new_file_id: u32) {
-        self.mods.get(mod_name).insert(&[mod_id, new_file_id]);
-        if let Err(e) = fs::write(
-            "config-lock.json",
-            serde_json::to_string_pretty(&self).unwrap(),
-        ) {
-            println!("Error updating mod: {} in config-lock: {}", mod_name, e);
+    pub fn is_new(&self, possibly_new_mod: &MCMod) -> bool {
+        match possibly_new_mod.platform {
+            Platform::Curseforge => !self.curseforge_mods.iter().any(|old_mod| old_mod.mod_name == possibly_new_mod.mod_name),
+            Platform::Modrinth => !self.modrinth_mods.iter().any(|old_mod| old_mod.mod_name == possibly_new_mod.mod_name)
         }
     }
 
-    pub fn new_mod(&mut self, mod_name: &str, mod_id: u32, file_id: u32) {
-        self.mods.insert(mod_name.to_string(), [mod_id, file_id]);
-
-        if let Err(e) = fs::write(
-            "config-lock.json",
-            serde_json::to_string_pretty(&self).unwrap().as_bytes(),
-        ) {
-            println!("Error adding mod: {} to config-lock: {}", mod_name, e);
+    pub fn is_same_version(&self, mc_mod: &MCMod) -> bool {
+        match mc_mod.platform {
+            Platform::Curseforge => self.curseforge_mods.iter().any(|mod_to_compare| mod_to_compare.file_id.eq(&mc_mod.file_id)),
+            Platform::Modrinth => self.modrinth_mods.iter().any(|mod_to_compare| mod_to_compare.file_id.eq(&mc_mod.file_id)),
         }
+    }
+
+    pub fn update_file_id(&self, old_file_id: u64, new_file_id: u64, platform: Platform) {
+        match platform {
+            Platform::Curseforge => self.curseforge_mods.iter().for_each(|mc_mod| if mc_mod.file_id == Some(old_file_id) { MCMod::copy(mc_mod).file_id = Some(new_file_id)} ),
+            Platform::Modrinth => self.modrinth_mods.iter().for_each(|mc_mod| if mc_mod.file_id == Some(old_file_id) { MCMod::copy(mc_mod).file_id = Some(new_file_id)} ),
+        };
+        
+        self.update_file();
+    }
+
+    pub fn new_mod(&mut self, mc_mod: MCMod) {
+        match mc_mod.platform {
+            Platform::Curseforge => self.curseforge_mods.push(mc_mod),
+            Platform::Modrinth => self.modrinth_mods.push(mc_mod)
+        };
+
+        self.update_file();
     }
 
     pub fn update_installer_version(&mut self, new_version: String) {
         self.installer_version = new_version.to_string();
 
-        if let Err(e) = fs::write(
-            "config-lock.json",
-            serde_json::to_string_pretty(&self).unwrap().as_bytes(),
-        ) {
-            println!("Error updating installer version in config-lock: {}", e);
-        }
+        self.update_file();
     }
 
     pub fn update_loader_version(&mut self, new_version: String) {
         self.loader_version = new_version;
 
-        if let Err(e) = fs::write(
-            "config-lock.json",
-            serde_json::to_string_pretty(&self).unwrap().as_bytes(),
-        ) {
-            println!("Error updating loader version in config-lock: {}", e);
-        }
+        self.update_file();
     }
 
     pub fn update_game_version(&mut self, new_version: String) {
         self.game_version = new_version;
 
-        if let Err(e) = fs::write(
-            "config-lock.json",
-            serde_json::to_string_pretty(&self).unwrap().as_bytes(),
-        ) {
-            println!("Error updating game version in config-lock: {}", e);
+        self.update_file();
+    }
+
+    fn update_file(&self) -> () {
+        match serde_json::to_string_pretty(self) {
+            Ok(pretty_string) => if let Err(e) = fs::write("config-lock.json", &pretty_string) {
+                println!("Error writing to config-lock.json: {}", e);
+            },
+            Err(_) => println!("Error parsing config-lock"),
         }
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, Copy, Clone)]
+pub enum Platform {
+    Modrinth,
+    Curseforge,
 }

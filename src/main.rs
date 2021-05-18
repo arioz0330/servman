@@ -1,4 +1,4 @@
-#![feature(decl_macro, option_insert)]
+#![feature(decl_macro)]
 
 // TODO: please clean up all code
 // TODO: setup ssl
@@ -14,6 +14,7 @@ use rocket::{http::RawStr, State};
 
 mod config;
 mod server;
+mod mods;
 
 #[macro_use]
 extern crate rocket;

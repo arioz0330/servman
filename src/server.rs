@@ -1,4 +1,4 @@
-use super::config;
+use super::{config, mods::MCMod};
 use std::sync::RwLock;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::process::{Child, Command, Stdio};
@@ -39,7 +39,7 @@ struct LatestFile {
     #[serde(rename = "gameVersion")]
     game_version: String,
     #[serde(rename = "projectFileId")]
-    project_file_id: u32,
+    project_file_id: u64,
     #[serde(rename = "projectFileName")]
     project_file_name: String,
 }
@@ -372,13 +372,13 @@ impl Manager {
             config_lock.update_game_version(game_version.to_string());
         }
 
-        for (mod_name, mod_id) in config::CONFIG.mods.iter() {
+        for mc_mod in config::CONFIG.curseforge_mods.iter() {
             let _ = rt.block_on(async {
-                println!("Checking mod: {}", mod_name);
+                println!("Checking mod: {}", mc_mod.mod_name);
 
                 let info: ModInfo = serde_json::from_str(
                     &client
-                        .get(&format!("{}{}", MOD_INFO, mod_id))
+                        .get(&format!("{}{}", MOD_INFO, mc_mod.mod_id))
                         .send()
                         .await
                         .unwrap()
@@ -390,21 +390,22 @@ impl Manager {
 
                 for item in info.game_version_latest_files {
                     if item.game_version.eq(game_version) {
-                        if config_lock.is_new(*mod_id) {
-                            config_lock.new_mod(mod_name, *mod_id, item.project_file_id);
+                        if config_lock.is_new(mc_mod) {
+                            config_lock.new_mod(MCMod::copy(mc_mod));
                         } else {
-                            if config_lock.is_same_version(mod_name, item.project_file_id) {
+                            if config_lock.is_same_version(mc_mod) {
                                 break;
                             }
-                            config_lock.update_file_id(mod_name, *mod_id, item.project_file_id);
+                            
+                            config_lock.update_file_id(mc_mod.mod_id, item.project_file_id, mc_mod.platform);
                         }
 
-                        print!("Downloading mod: {}, ", mod_name);
+                        print!("Downloading mod: {}, ", mc_mod.mod_name);
 
                         let mod_url = client
                             .get(&format!(
                                 "{}{}/file/{}/download-url",
-                                MOD_INFO, mod_id, item.project_file_id
+                                MOD_INFO, mc_mod.mod_id, item.project_file_id
                             ))
                             .send()
                             .await
@@ -437,6 +438,8 @@ impl Manager {
 
         Ok(())
     }
+
+    fn update_mods() {}
 }
 
 /// Represents a currently online server.
