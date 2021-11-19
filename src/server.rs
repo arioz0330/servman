@@ -1,4 +1,3 @@
-// use super::{config, mods::MCMod};
 use super::config;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::process::{Child, Command, Stdio};
@@ -11,7 +10,6 @@ type Result<T> = std::result::Result<T, ServerErrors>;
 extern crate serde_xml_rs;
 
 const FABRIC_INSTALLER: &str = "https://maven.fabricmc.net/net/fabricmc/fabric-installer";
-// const CURSEFORGE_MOD_INFO: &str = "https://addons-ecs.forgesvc.net/api/v2/addon/";
 
 #[derive(Deserialize, Debug)]
 struct Metadata {
@@ -27,12 +25,6 @@ struct Versioning {
 struct Latest {
   #[serde(rename = "$value")]
   data: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct ModInfo {
-  #[serde(rename = "gameVersionLatestFiles")]
-  game_version_latest_files: Vec<LatestFile>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
