@@ -2,3 +2,4 @@
 /ssl
 /server
 config*.json
+.idea

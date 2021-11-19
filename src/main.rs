@@ -5,16 +5,15 @@
 // TODO: handle all errors correctly
 // TODO: website
 
-use std::sync::Mutex;
+use async_mutex::Mutex;
 // use rocket::http::{Cookie, Cookies};
 // use rocket::response::{status, Flash, Redirect};
-use rocket::{http::RawStr, State};
+use rocket::{State};
 // use rocket::Data;
-// use serde::Deserialize;
+use figment::{providers::Serialized, Figment};
 
 mod config;
 mod server;
-mod mods;
 
 #[macro_use]
 extern crate rocket;
@@ -34,8 +33,8 @@ extern crate serde;
 
 // #[post("/login", format = "plain", data = "<password>")]
 // fn login(mut cookies: Cookies, password: Data) -> status::Accepted<&'static str> {
-//     if std::str::from_utf8(password.peek()).unwrap() == "minecraftpass" {
-//         cookies.add_private(Cookie::new("loggedin", "true"));
+//     if std::str::from_utf8(password.peek()).unwrap() == "minecraftPass" {
+//         cookies.add_private(Cookie::new("loggedIn", "true"));
 //         status::Accepted(Some("LoggedIn"))
 //     } else {
 //         status::Accepted(Some("this iS UNACCEPTABLE"))
@@ -44,59 +43,53 @@ extern crate serde;
 
 // #[post("/logout")]
 // fn logout(mut cookies: Cookies) -> Flash<Redirect> {
-//     cookies.remove_private(Cookie::named("loggedin"));
+//     cookies.remove_private(Cookie::named("loggedIn"));
 //     Flash::success(Redirect::to("/"), "Logged out.")
 // }
 
 #[post("/start")]
 // fn start(mut _cookies: Cookies, manager: State<Mutex<server::Manager>>) {
-fn start(manager: State<Mutex<server::Manager>>) {
-    // if cookies.get_private("loggedin").unwrap().value() == "true" {
-    let _ = manager.lock().unwrap().start();
-    // }
+async fn start(manager: &State<Mutex<server::Manager>>) {
+  // if cookies.get_private("loggedIn").unwrap().value() == "true" {
+  let _ = manager.lock().await.start();
+  // }
 }
 
 #[post("/stop")]
 // fn stop(mut _cookies: Cookies, manager: State<Mutex<server::Manager>>) {
-fn stop(manager: State<Mutex<server::Manager>>) {
-    // if cookies.get_private("loggedin").unwrap().value() == "true" {
-    let _ = manager.lock().unwrap().stop();
-    // }
+async fn stop(manager: &State<Mutex<server::Manager>>) {
+  // if cookies.get_private("loggedIn").unwrap().value() == "true" {
+  let _ = manager.lock().await.stop();
+  // }
 }
 
 #[post("/update")]
-fn update(manager: State<Mutex<server::Manager>>) {
-    let _ = manager.lock().unwrap().update();
+async fn update(manager: &State<Mutex<server::Manager>>) {
+  let _ = manager.lock().await.update();
 }
 
 #[post("/delete")]
-fn delete(manager: State<Mutex<server::Manager>>) {
-    let _ = manager.lock().unwrap().delete();
+async fn delete(manager: &State<Mutex<server::Manager>>) {
+  let _ = manager.lock().await.delete();
 }
 
 #[post("/create")]
-fn create(manager: State<Mutex<server::Manager>>) {
-    let _ = manager.lock().unwrap().create();
+async fn create(manager: &State<Mutex<server::Manager>>) {
+  let _ = manager.lock().await.create().await;
 }
 
 #[post("/op/<name>")]
-fn op(manager: State<Mutex<server::Manager>>, name: &RawStr) {
-    let _ = manager.lock().unwrap().op(name);
+async fn op(manager: &State<Mutex<server::Manager>>, name: &str) {
+  let _ = manager.lock().await.op(name);
 }
 
-#[post("/deop/<name>")]
-fn deop(manager: State<Mutex<server::Manager>>, name: &RawStr) {
-    let _ = manager.lock().unwrap().deop(name);
+#[post("/de-op/<name>")]
+async fn de_op(manager: &State<Mutex<server::Manager>>, name: &str) {
+  let _ = manager.lock().await.de_op(name);
 }
 
-fn main() {
-    let cfg = rocket::config::Config::build(rocket::config::Environment::active().unwrap())
-        // .address("127.0.0.1")
-        .port(config::CONFIG.port)
-        .unwrap();
-
-    rocket::custom(cfg)
-        .mount("/", routes![start, stop, update, delete, create, op, deop])
-        .manage(Mutex::new(server::Manager::new()))
-        .launch();
+#[rocket::main]
+async fn main() -> Result<(), rocket::Error> {
+  let figment = Figment::from(rocket::Config::default()).merge(Serialized::defaults(rocket::Config::default())).merge(("port", config::CONFIG.port));
+  rocket::custom(figment).mount("/", routes![start, stop, update, delete, create, op, de_op]).manage(Mutex::new(server::Manager::new())).launch().await
 }
