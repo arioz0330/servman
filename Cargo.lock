@@ -1253,7 +1253,6 @@ name = "servman"
 version = "0.1.0"
 dependencies = [
  "async-mutex",
- "figment",
  "lazy_static",
  "reqwest",
  "rocket",

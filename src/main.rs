@@ -10,7 +10,6 @@ use async_mutex::Mutex;
 // use rocket::response::{status, Flash, Redirect};
 use rocket::{State};
 // use rocket::Data;
-use figment::{providers::Serialized, Figment};
 
 mod config;
 mod server;
@@ -90,6 +89,6 @@ async fn de_op(manager: &State<Mutex<server::Manager>>, name: &str) {
 
 #[rocket::main]
 async fn main() -> Result<(), rocket::Error> {
-  let figment = Figment::from(rocket::Config::default()).merge(Serialized::defaults(rocket::Config::default())).merge(("port", config::CONFIG.port));
+  let figment = rocket::Config::figment().merge(("port", config::CONFIG.port));
   rocket::custom(figment).mount("/", routes![start, stop, update, delete, create, op, de_op]).manage(Mutex::new(server::Manager::new())).launch().await
 }
