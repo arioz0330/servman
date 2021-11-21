@@ -48,7 +48,7 @@ pub enum ServerErrors {
   ServerProcessExited(),
   ServerStillStarting(),
   NetworkError(),
-  ParsingError(),
+  FileError(String),
 }
 
 impl std::error::Error for ServerErrors {
@@ -63,7 +63,7 @@ impl std::error::Error for ServerErrors {
       ServerErrors::ServerAlreadyOnline() => "ServerAlreadyOnline",
       ServerErrors::ServerStillStarting() => "ServerStillStarting",
       ServerErrors::NetworkError() => "NetworkError",
-      ServerErrors::ParsingError() => "ParsingError"
+      ServerErrors::FileError(_) => "FileError"
     }
   }
 }
@@ -84,7 +84,7 @@ impl fmt::Display for ServerErrors {
         write!(f, "Attempted to stop server whilst mid-loading")
       },
       ServerErrors::NetworkError() => write!(f, "Error getting files from network"),
-      ServerErrors::ParsingError() => write!(f, "Error parsing files"),
+      ServerErrors::FileError(ref a) => write!(f, "Error parsing or saving a file(s): {}", a),
     }
   }
 }
@@ -245,8 +245,6 @@ impl Manager {
   /// # Remarks
   /// Stops the server if it's currently running
   pub async fn update(&mut self) -> Result<()> {
-    let client = reqwest::Client::new();
-
     if self.server.is_some() {
         match self.stop() {
           Ok(()) => println!("Server stopped"),
@@ -258,16 +256,16 @@ impl Manager {
 
     let mut config_lock = config::CONFIG_LOCK.lock().await;
 
-    let fabric: Metadata = match client.get(&format!("{}/maven-metadata.xml", FABRIC_INSTALLER)).send().await {
+    let fabric: Metadata = match attohttpc::get(&format!("{}/maven-metadata.xml", FABRIC_INSTALLER)).send() {
       Ok(response) => {
-        match response.text().await {
+        match response.text() {
           Ok(response_as_string) => {
             match from_str(&response_as_string) {
               Ok(metadata_as_xml) => metadata_as_xml,
-              Err(_) => return Err(ServerErrors::ParsingError()),
+              Err(_) => return Err(ServerErrors::FileError("metadata".to_string())),
             }
           },
-          Err(_) => return Err(ServerErrors::ParsingError()),
+          Err(_) => return Err(ServerErrors::FileError("metadata".to_string())),
         }
       },
       Err(_) => return Err(ServerErrors::NetworkError()),
@@ -278,17 +276,23 @@ impl Manager {
     if !config_lock.installer_version.eq(&ver) {
       println!("Updating installer");
 
-      let link = &format!("{0}/{1}/fabric-installer-{1}.jar", FABRIC_INSTALLER, ver);
-      let som =
-        client.get(link).send().await.unwrap().bytes().await.unwrap();
-
-      match fs::File::create("./server/fabric-installer.jar") {
-        Ok(mut file) => {
-          file.write_all(&som).unwrap();
-          config_lock.update_installer_version(ver);
+      match attohttpc::get(&format!("{0}/{1}/fabric-installer-{1}.jar", FABRIC_INSTALLER, ver)).send() {
+        Ok(response) => match response.bytes() {
+          Ok(installer_as_bytes) => {
+            match fs::File::create("./server/fabric-installer.jar") {
+              Ok(mut file) => {
+                file.write_all(&installer_as_bytes).unwrap();
+                config_lock.update_installer_version(ver);
+              },
+              Err(_) => return Err(ServerErrors::FileError("installer".to_string())),
+            };
+          },
+          Err(_) => return Err(ServerErrors::FileError("installer".to_string())),
         },
-        Err(e) => println!("Error downloading installer: {}", e),
-      };
+        Err(_) => return Err(ServerErrors::NetworkError()),
+      }
+
+
 
     }
 
