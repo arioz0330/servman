@@ -1,13 +1,14 @@
-use super::config;
+extern crate serde_xml_rs;
+
+use std::{fmt, fs, thread};
+use std::{path::Path, sync::Arc};
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::process::{Child, Command, Stdio};
 use std::sync::RwLock;
-use std::{fmt, fs, thread};
-use std::{path::Path, sync::Arc};
+
+use super::config;
 
 type Result<T> = std::result::Result<T, ServerErrors>;
-
-extern crate serde_xml_rs;
 
 const FABRIC_INSTALLER: &str = "https://maven.fabricmc.net/net/fabricmc/fabric-installer";
 
@@ -246,10 +247,10 @@ impl Manager {
   /// Stops the server if it's currently running
   pub async fn update(&mut self) -> Result<()> {
     if self.server.is_some() {
-        match self.stop() {
-          Ok(()) => println!("Server stopped"),
-          Err(e) => println!("Error stopping server: {}", e),
-        }
+      match self.stop() {
+        Ok(()) => println!("Server stopped"),
+        Err(e) => println!("Error stopping server: {}", e),
+      }
     }
 
     use serde_xml_rs::from_str;
@@ -291,9 +292,6 @@ impl Manager {
         },
         Err(_) => return Err(ServerErrors::NetworkError()),
       }
-
-
-
     }
 
     do_eula();
