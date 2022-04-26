@@ -1,5 +1,5 @@
 /target
 /ssl
 /server
-config*.json
+config*.xml
 .idea

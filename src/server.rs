@@ -255,7 +255,7 @@ impl Manager {
 
     use serde_xml_rs::from_str;
 
-    let mut config_lock = config::CONFIG_LOCK.lock().await;
+    let mut config = config::CONFIG.lock().await;
 
     let fabric: Metadata = match attohttpc::get(&format!("{}/maven-metadata.xml", FABRIC_INSTALLER)).send() {
       Ok(response) => {
@@ -274,7 +274,7 @@ impl Manager {
 
     let ver = fabric.versioning.latest.data;
 
-    if !config_lock.installer_version.eq(&ver) {
+    if !config.installer_version.eq(&ver) {
       println!("Updating installer");
 
       match attohttpc::get(&format!("{0}/{1}/fabric-installer-{1}.jar", FABRIC_INSTALLER, ver)).send() {
@@ -283,7 +283,7 @@ impl Manager {
             match fs::File::create("./server/fabric-installer.jar") {
               Ok(mut file) => {
                 file.write_all(&installer_as_bytes).unwrap();
-                config_lock.update_installer_version(ver);
+                config.update_installer_version(ver);
               },
               Err(_) => return Err(ServerErrors::FileError("installer".to_string())),
             };
@@ -310,12 +310,12 @@ impl Manager {
     let game_version = &a[left_paren + 1..right_paren].to_string();
     let loader_version = a[25..left_paren].to_string();
 
-    if !config_lock.loader_version.eq(&loader_version) {
-      config_lock.update_loader_version(loader_version);
+    if !config.loader_version.eq(&loader_version) {
+      config.update_loader_version(loader_version);
     }
 
-    if !game_version.eq(&config_lock.game_version) {
-      config_lock.update_game_version(game_version.to_string());
+    if !game_version.eq(&config.game_version) {
+      config.update_game_version(game_version.to_string());
     }
 
     Ok(())

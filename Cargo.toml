@@ -9,13 +9,12 @@ edition = "2021"
 [dependencies]
 rocket = "0.5.0-rc.1"
 serde-xml-rs = "0.5.1"
-serde_json = "1.0.71"
 lazy_static = "1.4.0"
 async-mutex = "1.4.0"
 attohttpc = "0.18.0"
 
 [dependencies.serde]
-version = "1.0.130"
+version = "1.0.136"
 default-features = false
 features = ["derive"]
 

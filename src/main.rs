@@ -89,6 +89,6 @@ async fn de_op(manager: &State<Mutex<server::Manager>>, name: &str) {
 
 #[rocket::main]
 async fn main() -> Result<(), rocket::Error> {
-  let figment = rocket::Config::figment().merge(("port", config::CONFIG.port));
+  let figment = rocket::Config::figment().merge(("port", config::CONFIG.lock().await.port));
   rocket::custom(figment).mount("/", routes![start, stop, update, delete, create, op, de_op]).manage(Mutex::new(server::Manager::new())).launch().await
 }
