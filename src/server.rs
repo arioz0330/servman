@@ -1,12 +1,9 @@
-extern crate serde_xml_rs;
-
 use std::{fmt, fs, thread};
 use std::{path::Path, sync::Arc};
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::process::{Child, Command, Stdio};
 use std::sync::RwLock;
-
-use super::config;
+use super::config::Config;
 
 type Result<T> = std::result::Result<T, ServerErrors>;
 
@@ -26,16 +23,6 @@ struct Versioning {
 struct Latest {
   #[serde(rename = "$value")]
   data: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct LatestFile {
-  #[serde(rename = "gameVersion")]
-  game_version: String,
-  #[serde(rename = "projectFileId")]
-  project_file_id: u64,
-  #[serde(rename = "projectFileName")]
-  project_file_name: String,
 }
 
 #[derive(Debug)]
@@ -100,12 +87,7 @@ impl From<std::io::Error> for ServerErrors {
 pub struct Manager {
   server: Option<Instance>,
   jar_name: &'static str,
-}
-
-impl Default for Manager {
-  fn default() -> Self {
-    Self::new()
-  }
+  config: Config,
 }
 
 impl Manager {
@@ -116,14 +98,15 @@ impl Manager {
   /// ```
   /// # Remarks
   /// The version_folder should be a folder that contains folders that are named the same as the MC server files they contain.
-  pub fn new() -> Manager {
+  pub fn new(config: Config) -> Manager {
     Manager {
       server: None,
       jar_name: "fabric-server-launch.jar",
+      config,
     }
   }
 
-  /// Creates a new MC server folder under the `server_files_folder`
+  /// Creates a new MC server folder under `server`
   /// # Examples
   /// ```
   /// let manager = servman::Manager::new();
@@ -255,8 +238,6 @@ impl Manager {
 
     use serde_xml_rs::from_str;
 
-    let mut config = config::CONFIG.lock().await;
-
     let fabric: Metadata = match attohttpc::get(&format!("{}/maven-metadata.xml", FABRIC_INSTALLER)).send() {
       Ok(response) => {
         match response.text() {
@@ -274,7 +255,7 @@ impl Manager {
 
     let ver = fabric.versioning.latest.data;
 
-    if !config.installer_version.eq(&ver) {
+    if !self.config.installer_version.eq(&ver) {
       println!("Updating installer");
 
       match attohttpc::get(&format!("{0}/{1}/fabric-installer-{1}.jar", FABRIC_INSTALLER, ver)).send() {
@@ -283,7 +264,7 @@ impl Manager {
             match fs::File::create("./server/fabric-installer.jar") {
               Ok(mut file) => {
                 file.write_all(&installer_as_bytes).unwrap();
-                config.update_installer_version(ver);
+                self.config.update_installer_version(ver);
               },
               Err(_) => return Err(ServerErrors::FileError("installer".to_string())),
             };
@@ -310,12 +291,12 @@ impl Manager {
     let game_version = &a[left_paren + 1..right_paren].to_string();
     let loader_version = a[25..left_paren].to_string();
 
-    if !config.loader_version.eq(&loader_version) {
-      config.update_loader_version(loader_version);
+    if !self.config.loader_version.eq(&loader_version) {
+      self.config.update_loader_version(loader_version);
     }
 
-    if !game_version.eq(&config.game_version) {
-      config.update_game_version(game_version.to_string());
+    if !game_version.eq(&self.config.game_version) {
+      self.config.update_game_version(game_version.to_string());
     }
 
     Ok(())

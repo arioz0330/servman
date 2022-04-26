@@ -1,8 +1,4 @@
 use std::fs;
-use async_mutex::Mutex;
-extern crate serde_xml_rs;
-
-// TODO: add option for console to terminal
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Config {
@@ -60,16 +56,4 @@ pub fn create_new_config() -> Config {
     Err(e) => println!("Error parsing default config: {:?}", e),
   }
   def_config
-}
-
-lazy_static::lazy_static! {
-    pub static ref CONFIG: Mutex<Config> = {
-            match fs::read_to_string("config.xml") {
-                Ok(file) => match serde_xml_rs::from_str::<Config>(&file) {
-                    Ok(conf) => Mutex::new(conf),
-                    _ => Mutex::new(create_new_config()),
-                },
-                _ => Mutex::new(create_new_config()),
-            }
-        };
 }

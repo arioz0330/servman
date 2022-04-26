@@ -10,6 +10,8 @@ use async_mutex::Mutex;
 // use rocket::response::{status, Flash, Redirect};
 use rocket::{State};
 // use rocket::Data;
+use config::{Config, create_new_config};
+use std::fs;
 
 mod config;
 mod server;
@@ -19,6 +21,8 @@ extern crate rocket;
 
 #[macro_use]
 extern crate serde;
+
+extern crate serde_xml_rs;
 
 // #[get("/")]
 // fn index() -> &'static str {
@@ -89,6 +93,16 @@ async fn de_op(manager: &State<Mutex<server::Manager>>, name: &str) {
 
 #[rocket::main]
 async fn main() -> Result<(), rocket::Error> {
-  let figment = rocket::Config::figment().merge(("port", config::CONFIG.lock().await.port));
-  rocket::custom(figment).mount("/", routes![start, stop, update, delete, create, op, de_op]).manage(Mutex::new(server::Manager::new())).launch().await
+  let config: Config = {
+    match fs::read_to_string("config.xml") {
+      Ok(file) => match serde_xml_rs::from_str::<Config>(&file) {
+        Ok(conf) => conf,
+        _ => create_new_config(),
+      },
+      _ => create_new_config(),
+    }
+  };
+
+  let figment = rocket::Config::figment().merge(("port", config.port));
+  rocket::custom(figment).mount("/", routes![start, stop, update, delete, create, op, de_op]).manage(Mutex::new(server::Manager::new(config))).launch().await
 }
